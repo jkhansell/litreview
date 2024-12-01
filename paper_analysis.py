@@ -4,15 +4,8 @@ import matplotlib.pyplot as plt
 import re
 plt.rcParams['axes.axisbelow'] = True
 
-import gensim.downloader
-from gensim.models import Word2Vec
-from gensim.utils import simple_preprocess
-from gensim.test.utils import datapath, get_tmpfile
-from gensim.models import KeyedVectors
-from gensim.scripts.glove2word2vec import glove2word2vec
-from gensim.models.phrases import Phrases, Phraser, ENGLISH_CONNECTOR_WORDS
-
-stopwords = ["i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", "yours", "yourself", "yourselves", "he", "him", "his", "himself", "she", "her", "hers", "herself", "it", "its", "itself", "they", "them", "their", "theirs", "themselves", "what", "which", "who", "whom", "this", "that", "these", "those", "am", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "having", "do", "does", "did", "doing", "a", "an", "the", "and", "but", "if", "or", "because", "as", "until", "while", "of", "at", "by", "for", "with", "about", "against", "between", "into", "through", "during", "before", "after", "above", "below", "to", "from", "up", "down", "in", "out", "on", "off", "over", "under", "again", "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very", "s", "t", "can", "will", "just", "don", "should", "now"]
+from datasets import Dataset
+from transformers import pipeline, BatchEncoding
 
 def unify_databases(sources):
     source_dfs = []
@@ -30,7 +23,7 @@ def unify_databases(sources):
 
 def normalize_text(text):
     """Normalize text for comparison by removing punctuation, lowercasing, and trimming whitespace."""
-    return re.sub(r'\W+', '', text.lower().strip())
+    return re.sub(r'\W+', '', text.strip())
 
 def clean_dataframe(df):
     df["TitleNorm"] = df["Title"].map(normalize_text)
@@ -44,50 +37,6 @@ def gensim_tokenize_data(df):
     df["gensim_tokenized_abstracts"] = df["Abstract Note"].map(lambda x: simple_preprocess(x.lower(), deacc=True))
     return df
 
-def ngram_tokenizer(n, cleaned_docs):
-    ngramed_docs = cleaned_docs
-
-    for _ in range(n):
-        ngram = Phrases(ngramed_docs, min_count=20, threshold=10, delimiter=" ")
-        ngram_phraser = Phraser(ngram)
-
-        ngramed_tokens = []
-        for sent in ngramed_docs:
-            tokens = ngram_phraser[sent]
-            ngramed_tokens.append(tokens)
-        
-        ngramed_docs = ngramed_tokens
-    return ngramed_tokens
-
-def train_glove_titles(glove_model, df): 
-    documents = df["gensim_tokenized_abstracts"]
-    titles = [title for title in documents]
-
-    cleaned = []
-    for title in titles:
-        cleaned_title = [word.lower() for word in title]
-        cleaned_title = [word for word in title if word not in stopwords]
-        cleaned.append(cleaned_title)
-    
-    ngram_tokens = ngram_tokenizer(3, cleaned)
-
-    # build a toy model to update with
-    base_model = Word2Vec(vector_size=300, min_count=5)
-    base_model.build_vocab(ngram_tokens)
-    # add GloVe's vocabulary & weights
-    base_model.build_vocab([glove_model.index_to_key], update=True)
-    total_examples = base_model.corpus_count
-
-    # train on our data
-    base_model.train(ngram_tokens, total_examples=total_examples, epochs=10)
-    return base_model
-
-def test_w2v(model, words):
-    for word in words:
-        math_result = model.most_similar(word, topn=5)
-        print(f'Word: - {word}')
-        [print(f"- {result[0]} ({round(result[1],5)})") for result in math_result]
-        print()
 
 def graph_distribution(df, name=None):
     plt.hist(df["Publication Year"],bins=9)
@@ -107,6 +56,16 @@ def graph_sources(df, name=None):
     plt.savefig("barplot"+name+".png")
     plt.close()
 
+    # Function to process abstracts in batches
+def process_batch(batch, labels, classifier):
+    # Apply the classifier to a batch of abstracts
+    abstracts = batch['Abstract Note']
+    results = classifier(abstracts, candidate_labels=labels)
+    return {
+        'scores': [result['scores'][0] for result in results],  # Extract first score
+        'labels': [result['labels'] for result in results]
+    }
+
 if __name__ == "__main__":
     sources = ["Google-Scholar", "Web-of-Science", "IEEE", "Scopus"]
     df = unify_databases(sources)
@@ -116,11 +75,99 @@ if __name__ == "__main__":
     df = clean_dataframe(df)
     #graph_distribution(df, name="_processed")
     #graph_sources(df, name="_processed")
-    # load model
-    #df = gensim_tokenize_data(df)
-    #glove_model = KeyedVectors.load_word2vec_format('/work/jovillalobos/glove.840B.300d.bin', binary=True)
-    #glove_model = KeyedVectors.load_word2vec_format('/work/jovillalobos/glove.840B.300d.txt', binary=False, no_header=True)
-    glove_model = KeyedVectors.load("/work/jovillalobos/glove.840B.300d.bin", mmap="r")
-    #model = train_glove_titles(glove_model, df)
-    words = ["shallow", "water", "equations"]
-    test_w2v(glove_model, words)
+
+    # classify papers using NLP
+    classifier = pipeline("zero-shot-classification", model="MoritzLaurer/deberta-v3-large-zeroshot-v2.0", device=0, torch_dtype="auto")
+    labels = [
+        ["bed load transport"],
+        ["high performance computing enabled"],
+        ["two dimensional"],
+        ["finite Volume method"],
+        ["finite element method"],
+        ["finite difference method"],
+        ["numerical method development"],
+        ["riverbed morphology"],
+        ["general hydrological modeling"], 
+        ["ocean modeling"], 
+        ["presents computational performance reports"],
+        ["performs validation of numerical solution"]
+    ]
+
+    for label in labels:
+        dataset = Dataset.from_pandas(df[['Abstract Note']])
+
+        # Apply batch processing
+        # Results are better when it's binary processing instead of Multi-Label classification
+        batch_size = 64  # You can adjust the batch size based on available GPU memory
+        results = dataset.map(lambda x: process_batch(x, label, classifier), batched=True, batch_size=batch_size)
+        # Convert the results back to a pandas DataFrame for easier analysis
+        result_df = pd.DataFrame(results)        
+        df[label[0]] = result_df["scores"]
+
+    df.to_csv("classified.csv")
+    # Display the processed results
+
+    df["BLT"] = df["bed load transport"].map(lambda x: x.replace("[", "").replace("]", "")).astype(float) > 0.85
+    df["HPC"] = df["high performance computing enabled"].map(lambda x: x.replace("[", "").replace("]", "")).astype(float) > 0.85
+    df["2D"] = df["two dimensional"].map(lambda x: x.replace("[", "").replace("]", "")).astype(float) > 0.85
+    df["FVM"] = df["finite Volume method"].map(lambda x: x.replace("[", "").replace("]", "")).astype(float) > 0.85
+    df["FEM"] = df["finite element method"].map(lambda x: x.replace("[", "").replace("]", "")).astype(float) > 0.85
+    df["FDM"] = df["finite difference method"].map(lambda x: x.replace("[", "").replace("]", "")).astype(float) > 0.85
+    df["NMD"] = df["numerical method development"].map(lambda x: x.replace("[", "").replace("]", "")).astype(float) > 0.85
+    df["CPR"] = df["presents computational performance reports"].map(lambda x: x.replace("[", "").replace("]", "")).astype(float) > 0.85
+    df["VNS"] = df["performs validation of numerical solution"].map(lambda x: x.replace("[", "").replace("]", "")).astype(float) > 0.85
+
+    labels = ["BLT", "HPC", "2D", "FVM", "FEM", "FDM", "NMD", "CPR", "VNS"]
+    custom_colors = ['#ff9999', '#66b3ff', '#99ff99']
+
+    fig, ax = plt.subplots()
+
+    trues = []
+    falses = []
+    values = None
+    for label in labels:
+        classes, values = np.unique(df[label], return_counts=True)
+        trues.append(100*values[1]/np.sum(values))
+
+    z = [x for _, x in sorted(zip(trues, labels), reverse=True)]
+
+    #plt.bar(labels, falses, color=custom_colors[0])
+    plt.bar(z, sorted(trues, reverse=True), color=custom_colors[1])
+    plt.grid()
+    plt.xlabel("Topic Abbreviation")
+    plt.ylabel("Percentage of papers")
+    plt.text(5.5, 60, "Total papers: "+str(np.sum(values)), size=10,
+            ha="center", va="center",
+            bbox=dict(boxstyle="round",
+                    ec=(0., 0.5, 0.5),
+                    fc=(1., 1, 1),
+                    )
+            )
+    plt.savefig("overall.png")
+    plt.close()
+
+    """    fig = go.Figure()
+    fig.add_trace(go.Scatterpolar(
+        r=trues, 
+        theta=labels,
+        name="Total papers: 92"
+    ))
+    fig.update_layout(
+                polar=dict(
+                    radialaxis=dict(
+                    visible=True
+                    ),
+                ),
+                font=dict(
+                    size=18,  # Set the font size here
+                ),
+                legend={
+                    "x": 0.3,
+                    "xref": "container",
+                    "yref": "container",
+                    "orientation": "h"
+                },
+                showlegend=True
+            )
+    fig.write_image("radar_performance.png",width=800, height=600, scale=1.5)
+    """
