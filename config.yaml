@@ -1,0 +1,42 @@
+# Litreview Configuration
+
+paths:
+  raw_data: "data/raw"
+  processed_data: "data/processed"
+  plots: "results/plots"
+
+# mixture of experts results (for now it's a simple join)
+models:
+  - "facebook/bart-large-mnli"
+  - "MoritzLaurer/deberta-v3-large-zeroshot-v2.0"
+  - "MoritzLaurer/ModernBERT-large-zeroshot-v2.0"
+
+sources:
+  - "Google-Scholar"
+  - "Web-of-Science"
+  - "IEEE"
+  - "Scopus"
+
+labels:
+  BLT: "bedload transport"
+  MB: "mobile bed"
+  HPC: "high performance computing enabled"
+  GPU: "gpu accelerated"
+  MPI: "distributed memory"
+  CPU: "cpu multithreading"
+  "2D": "two dimensional"
+  "1D": "one dimensional"
+  DET: "deterministic"
+  STC: "stochastic"
+  FVM: "finite volume method"
+  FEM: "finite element method"
+  FDM: "finite difference method"
+  NMD: "numerical method development"
+  RBM: "riverbed morphology"
+  GHM: "hydrological modeling"
+  OM: "ocean modeling"
+  CPR: "computational performance report"
+  VNM: "validation of numerical method"
+  IBER: "iber"
+  TELEMAC: "telemac"
+  HEC-RAS: "hec-ras"

@@ -8,7 +8,7 @@
 #SBATCH --mail-user=jovillalobos@cenat.ac.cr
 #SBATCH --mail-type=END,FAIL
 
-source /home/jovillalobos/.bashrc
 
+# Activate Kabre slurm environment 
 conda activate pytorch-cuda
-python paper_analysis.py
+python scripts/run_analysis.py
