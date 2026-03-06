@@ -7,7 +7,7 @@ Literature Review tools for Master's Thesis in Electrical Engineering at Univers
 - `litreview/`: Core Python package containing analysis and visualization logic.
 - `config.yaml`: Central configuration file for models, labels, sources, and paths.
 - `data/`:
-    - `raw/`: Original CSV files from databases (Google Scholar, Web of Science, IEEE, Scopus).
+    - `raw/`: Original CSV files from databases (Google Scholar, Web of Science, IEEE, Scopus) produced by Zotero.
     - `processed/`: Classified and filtered CSV results.
 - `results/plots/`: Generated visualizations.
 - `scripts/`: Entry point scripts for the pipeline.
