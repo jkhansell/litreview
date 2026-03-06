@@ -24,18 +24,27 @@ pip install -e .
 ## Usage
 
 ### 1. Run Analysis
-To process the raw data and run the zero-shot classification:
+To process data and run the zero-shot classification:
 
+**Using local CSVs:**
 ```bash
-python scripts/run_analysis.py
+python scripts/run_analysis.py --config config.yaml
 ```
-*Note: This requires a GPU and may take significant time depending on the number of papers.*
+
+**Using Zotero Library:**
+1. Configure your Zotero credentials in `config.yaml`.
+2. Run:
+```bash
+python scripts/run_analysis.py --config config.yaml --fetch-zotero
+```
+
+*Note: Classification requires a GPU and may take significant time.*
 
 ### 2. Generate Plots
 To generate visualizations and filter the classified data:
 
 ```bash
-python scripts/run_plots.py
+python scripts/run_plots.py --config config.yaml
 ```
 
 ## Dependencies
@@ -46,3 +55,5 @@ python scripts/run_plots.py
 - transformers
 - torch
 - datasets
+- pyzotero
+- PyYAML

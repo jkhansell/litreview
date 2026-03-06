@@ -26,6 +26,7 @@ dependencies = [
     "torch",
     "datasets",
     "PyYAML",
+    "pyzotero",
 ]
 
 [project.scripts]

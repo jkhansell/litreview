@@ -1,11 +1,17 @@
 # Litreview Configuration
 
+zotero:
+  library_id: "YOUR_ZOTERO_LIBRARY_ID"
+  library_type: "user" # 'user' or 'group'
+  api_key: "YOUR_API_KEY"
+  collection_name: "YOUR_COLLECTION_NAME" # Optional: specify a collection name to fetch from
+
 paths:
   raw_data: "data/raw"
   processed_data: "data/processed"
   plots: "results/plots"
 
-# mixture of experts results (for now it's a simple join)
+# mixture of experts results (for now its simple joins)
 models:
   - "facebook/bart-large-mnli"
   - "MoritzLaurer/deberta-v3-large-zeroshot-v2.0"

@@ -1,12 +1,15 @@
 import os
 import pandas as pd
 import argparse
+import sys
 from litreview.analysis import unify_databases, clean_dataframe, run_classification_pipeline
 from litreview.utils import load_config
+from litreview.zotero import ZoteroFetcher
 
 def main():
     parser = argparse.ArgumentParser(description="Run literature review classification pipeline.")
     parser.add_argument("--config", type=str, default="config.yaml", help="Path to config YAML file")
+    parser.add_argument("--fetch-zotero", action="store_true", help="Fetch data from Zotero library instead of local CSVs")
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -19,11 +22,37 @@ def main():
     models = config.get("models", [])
     labels_map = config.get("labels", {})
 
-    # 1. Unify
-    print(f"Unifying databases from {raw_dir}...")
-    df = unify_databases(sources, data_dir=raw_dir)
+    if args.fetch_zotero:
+        zot_config = config.get("zotero", {})
+        lib_id = zot_config.get("library_id")
+        lib_type = zot_config.get("library_type", "user")
+        api_key = zot_config.get("api_key")
+        col_name = zot_config.get("collection_name")
+        
+        # If library_id looks like a name (not numeric), warn user
+        if lib_id and not str(lib_id).isdigit():
+            print(f"Warning: library_id '{lib_id}' does not look like a numeric Zotero ID.")
+            print("Zotero Library IDs are usually numeric (e.g. 1234567).")
+        
+        if not lib_id or not api_key:
+            print("Error: Zotero library_id and api_key must be specified in config.yaml when using --fetch-zotero")
+            return
+            
+        try:
+            fetcher = ZoteroFetcher(lib_id, lib_type, api_key)
+            items = fetcher.fetch_items(collection_name=col_name)
+            df = fetcher.to_dataframe(items)
+            print(f"Fetched {len(df)} items with abstracts from Zotero.")
+        except Exception as e:
+            # Errors are already printed in fetcher.fetch_items
+            sys.exit(1)
+    else:
+        # 1. Unify from local CSVs
+        print(f"Unifying databases from {raw_dir}...")
+        df = unify_databases(sources, data_dir=raw_dir)
+        
     if df.empty:
-        print(f"No data found in {raw_dir}. Please check your config or data files.")
+        print(f"No data found. Please check your config, Zotero credentials, or data files.")
         return
 
     # 2. Clean
